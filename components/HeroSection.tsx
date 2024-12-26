@@ -123,7 +123,7 @@ const EmailPopup: React.FC<EmailPopupProps> = ({ isOpen, onClose, onSubmit, regi
                   className="mt-1"
                 />
                 <span className="text-sm text-gray-400">
-                  Soovin saada personaalseid pakkumisi ja uudiskirja. Võin igal ajal tellimuse lõpetada.
+                  Lisaks uutele pakkumistele, soovin saada analüüsi tulemuste kohta ka edaspidi infot meilile.
                 </span>
               </label>
               <div className="flex">
@@ -135,6 +135,13 @@ const EmailPopup: React.FC<EmailPopupProps> = ({ isOpen, onClose, onSubmit, regi
                   {isLoading ? 'Laadimine...' : 'Alusta analüüsi'}
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full text-gray-500 text-sm mt-4 hover:text-gray-700"
+              >
+                Sulge aken
+              </button>
             </form>
           </>
         )}
