@@ -108,7 +108,7 @@ export default function LoginForm() {
           </form>
           <div>
             <Link 
-              href="/unustasid-parooli" 
+              href="/unustasin-parooli"
               className="text-[#3B5FE5] hover:underline font-medium text-base inline-flex"
             >
               Unustasid parooli? Taasta parool
