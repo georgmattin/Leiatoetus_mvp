@@ -1,10 +1,35 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from 'next/navigation';
 
 const MobileHeader = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsMenuOpen(false);
+    router.push('/logi-sisse');
+  };
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -66,16 +91,27 @@ const MobileHeader = () => {
         </Link>
 
         {/* Nupud */}
-        <Link href="/logi-sisse">
-          <button className="mt-4 bg-[#F6F9FC] border border-gray-400 text-black text-[19.2px] px-4 py-2 rounded hover:bg-blue-600">
-            Logi sisse
+        {isLoggedIn ? (
+          <button
+            onClick={handleLogout}
+            className="mt-4 bg-[#F6F9FC] border border-gray-400 text-black text-[19.2px] px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Logi välja
           </button>
-        </Link>
-        <Link href="/loo-konto">
-          <button className="mt-4 bg-[#3F5DB9] text-white px-6 py-2 text-[19.2px] rounded hover:bg-[#2C468C]">
-            Liitu tasuta
-          </button>
-        </Link>
+        ) : (
+          <>
+            <Link href="/logi-sisse">
+              <button className="mt-4 bg-[#F6F9FC] border border-gray-400 text-black text-[19.2px] px-4 py-2 rounded hover:bg-blue-600">
+                Logi sisse
+              </button>
+            </Link>
+            <Link href="/loo-konto">
+              <button className="mt-4 bg-[#3F5DB9] text-white px-6 py-2 text-[19.2px] rounded hover:bg-[#2C468C]">
+                Liitu tasuta
+              </button>
+            </Link>
+          </>
+        )}
       </div>
     </header>
   );

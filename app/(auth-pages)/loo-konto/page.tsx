@@ -1,30 +1,15 @@
-import Header from "@/components/header";
-import MobileHeader from "@/components/mobileheader";
+import RegisterForm from "@/components/user_auth_components/register"
+import Header from "@/components/header"
+import MobileHeader from "@/components/mobileheader"
 
-
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
-
-import type { Database } from '@/lib/database.types'
-
-export async function POST(request: Request) {
-  const requestUrl = new URL(request.url)
-  const formData = await request.formData()
-  const email = String(formData.get('email'))
-  const password = String(formData.get('password'))
-  const cookieStore = cookies()
-  const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore })
-
-  await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${requestUrl.origin}/auth/callback`,
-    },
-  })
-
-  return NextResponse.redirect(requestUrl.origin, {
-    status: 301,
-  })
+export default function RegisterPage() {
+  return (
+    <>
+      <Header />
+      <MobileHeader />
+      <main className="min-h-screen bg-[#F6F9FC] py-16 px-4">
+        <RegisterForm />
+      </main>
+    </>
+  )
 }

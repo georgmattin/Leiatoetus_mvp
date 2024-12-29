@@ -1,60 +1,76 @@
 'use client'
+
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import GrantsTable from '@/components/grants-table-full'
 import confetti from 'canvas-confetti'
-import Header from "@/components/header";
-import MobileHeader from "@/components/mobileheader";
+import Header from "@/components/header"
+import MobileHeader from "@/components/mobileheader"
+import { supabase } from "@/lib/supabaseClient"
 
 export default function SobivadToetusedPage() {
-  const companyName = "Firma nimi OÜ"
-  const resultsCount = "7"
-  const savedTime = "90"
-  const grantsTotal = "35000"
-  const viewedGrants = "370"
-  
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
   const [animatedTotal, setAnimatedTotal] = useState(0)
   const [animatedTime, setAnimatedTime] = useState(0)
   const [animatedResults, setAnimatedResults] = useState(0)
   const [animatedGrants, setAnimatedGrants] = useState(0)
   const [allAnimationsComplete, setAllAnimationsComplete] = useState(false)
 
- // Check if all animations are complete and trigger confetti
- useEffect(() => {
-  if (
-    animatedTotal === parseInt(grantsTotal) &&
-    animatedTime === parseInt(savedTime) &&
-    animatedGrants === parseInt(viewedGrants) &&
-    animatedResults === parseInt(resultsCount) &&
-    !allAnimationsComplete
-  ) {
-    setAllAnimationsComplete(true);
+  const companyName = "Firma nimi OÜ"
+  const resultsCount = "7"
+  const savedTime = "90"
+  const grantsTotal = "35000"
+  const viewedGrants = "370"
+  
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        router.push('/logi-sisse')
+        return
+      }
+      
+      setIsLoading(false)
+    }
 
-    // Left side confetti
-    confetti({
-      particleCount: 100,
-      spread: 105,
-      origin: { x: 0, y: 0.6 },
-    });
+    checkUser()
+  }, [router])
 
-    // Right side confetti
-    confetti({
-      particleCount: 100,
-      spread: 105,
-      origin: { x: 1, y: 0.6 },
-    });
-  }
-}, [
-  animatedTotal,
-  animatedTime,
-  animatedResults,
-  animatedGrants,
-  grantsTotal,
-  savedTime,
-  resultsCount,
-  viewedGrants,
-  allAnimationsComplete,
-]);
+  useEffect(() => {
+    if (
+      animatedTotal === parseInt(grantsTotal) &&
+      animatedTime === parseInt(savedTime) &&
+      animatedGrants === parseInt(viewedGrants) &&
+      animatedResults === parseInt(resultsCount) &&
+      !allAnimationsComplete
+    ) {
+      setAllAnimationsComplete(true)
+      
+      confetti({
+        particleCount: 100,
+        spread: 105,
+        origin: { x: 0, y: 0.6 },
+      })
 
+      confetti({
+        particleCount: 100,
+        spread: 105,
+        origin: { x: 1, y: 0.6 },
+      })
+    }
+  }, [
+    animatedTotal,
+    animatedTime,
+    animatedResults,
+    animatedGrants,
+    grantsTotal,
+    savedTime,
+    resultsCount,
+    viewedGrants,
+    allAnimationsComplete,
+  ])
 
   useEffect(() => {
     const duration = 1000 // 2 seconds
@@ -113,8 +129,7 @@ export default function SobivadToetusedPage() {
     return () => clearInterval(timer)
   }, [resultsCount])
 
-
-    useEffect(() => {
+  useEffect(() => {
     const duration = 1000; // 2 seconds
     const steps = 60;
     const increment = parseInt(viewedGrants) / steps;
@@ -123,20 +138,24 @@ export default function SobivadToetusedPage() {
     const timer = setInterval(() => {
       current += increment;
       if (current >= parseInt(viewedGrants)) {
-        setAnimatedGrants(parseInt(viewedGrants)); // Parandus siin
+        setAnimatedGrants(parseInt(viewedGrants));
         clearInterval(timer);
       } else {
-        setAnimatedGrants(Math.floor(current)); // Parandus siin
+        setAnimatedGrants(Math.floor(current));
       }
     }, duration / steps);
 
     return () => clearInterval(timer);
   }, [viewedGrants]);
 
+  if (isLoading) {
+    return null
+  }
+
   return (
     <>
-    <Header/>
-    <MobileHeader />
+      <Header />
+      <MobileHeader />
       <section id="intro-section" className="w-full bg-[#F6F9FC] md:px-0 pt-[50px] pb-[40px]">
         <div className="max-w-[1200px] mx-auto px-[15px] md:px-[30px] py-[0px] bg-white/0 rounded-[15px]">
           <div className="text-center">
