@@ -3,6 +3,9 @@
 import { Table, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table"
 import { useState, useEffect } from 'react'
 import React from 'react';
+import { Check } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 interface Grant {
   status: 'avatud' | 'avaneb-peatselt' | 'loppeb-peatselt'
@@ -111,12 +114,68 @@ function SkeletonRow() {
 }
 
 const GrantsTable: React.FC<GrantsTableProps> = ({ grantsData }) => {
+  const supabase = createClientComponentClient();
   console.group('🏗️ GrantsTable Render');
   console.log('Initial grantsData:', grantsData);
   
   const [isLoading, setIsLoading] = useState(true)
   const [visibleRows, setVisibleRows] = useState<number[]>([])
   const [isBlurred, setIsBlurred] = useState(true);
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        setUserEmail(user.email);
+        setIsBlurred(false); // Unblur the table if user is logged in
+      } else {
+        setIsBlurred(true); // Keep table blurred if user is not logged in
+      }
+    };
+    getUser();
+  }, [supabase]);
+
+  const handlePayment = async () => {
+    if (!userEmail) {
+      alert('Palun logige sisse enne ostu sooritamist.');
+      return;
+    }
+
+    setIsPaymentProcessing(true);
+    try {
+      const response = await fetch('/api/createOrder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email: userEmail,
+          amount: 5 
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Server error:', data);
+        throw new Error(data.error || 'Payment initiation failed');
+      }
+
+      if (!data.paymentUrl) {
+        throw new Error('No payment URL received');
+      }
+
+      console.log('Redirecting to:', data.paymentUrl);
+      window.location.href = data.paymentUrl;
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('Makse algatamine ebaõnnestus. Palun proovige uuesti.');
+    } finally {
+      setIsPaymentProcessing(false);
+    }
+  };
 
   // Convert grantsData to Grant format
   const processedGrants: Grant[] = React.useMemo(() => {
@@ -201,7 +260,13 @@ const GrantsTable: React.FC<GrantsTableProps> = ({ grantsData }) => {
 
   return (
     <div id="grants-table-wrapper" className="w-full">
-      <BlurToggle />
+      {!userEmail && (
+        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+          <p className="text-blue-700">
+            Täieliku info nägemiseks palun <a href="/logi-sisse" className="font-bold underline">logige sisse</a> või <a href="/loo-konto" className="font-bold underline">looge konto</a>.
+          </p>
+        </div>
+      )}
       <div id="grants-table-container" className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <Table>
@@ -218,63 +283,114 @@ const GrantsTable: React.FC<GrantsTableProps> = ({ grantsData }) => {
             </thead>
             <TableBody className="divide-y divide-gray-200">
               {isLoading ? (
-                // Show skeleton rows while loading
                 [...Array(4)].map((_, index) => (
                   <SkeletonRow key={index} />
                 ))
               ) : (
-                processedGrants.map((grant, index) => (
-                  <TableRow 
-                    key={index}
-                    className={`bg-white hover:bg-gray-50/50 transition-all duration-500 ${
-                      visibleRows.includes(index) ? 'opacity-100' : 'opacity-0'
-                    }`}
-                  >
-                    <TableCell className="border-r h-[52px]">
-                      {getStatusBadge(grant.status)}
-                    </TableCell>
-                    <TableCell className="border-r font-medium">
-                      <span className="text-emerald-600 hover:opacity-75 transition-opacity cursor-help" title="Sobivuse skoor põhineb teie ettevõtte profiilist">
-                        {grant.suitability}
-                      </span>
-                    </TableCell>
-                    <TableCell className="border-r text-gray-600">
-                      {grant.provider && (
-                        <span className={isBlurred ? "blur-[2px] opacity-60" : ""}>
-                          {isBlurred ? "••••••" : grant.provider}
+                <>
+                  {!userEmail && (
+                    <TableRow className="bg-white">
+                      <TableCell colSpan={7} id="grants-banner" className="bg-blue-50/80 p-0">
+                        <div className="h-full">
+                          <div className="py-6 pl-[50px] pr-6">
+                            <div className="space-y-6 max-w-full">
+                              <h3 id="banner-title" className="text-[27.65px] leading-[1.2] font-semibold text-gray-900">
+                                Täieliku info nägemiseks
+                                <br />
+                                osta ühekordne raport <span className="text-blue-600 font-bold">5€</span>
+                              </h3>
+                              <div id="banner-features" className="space-y-4">
+                                <div className="flex items-start gap-3">
+                                  <Check className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                  <div>
+                                    <p className="font-medium text-gray-900">Personaalne ülevaade sinu ettevõttele sobivatest toetustest</p>
+                                    <p className="text-gray-500">praegu saadavalolevad ja peatselt avanevad toetusmeetmed</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                  <Check className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                  <div>
+                                    <p className="font-medium text-gray-900">Toetuste info ja ülevaade</p>
+                                    <p className="text-gray-500">abikõlbulikud kulud, mitteabikõlbulikud kulu, omafinantseeringu suurus jne</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                  <Check className="h-5 w-5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                  <div>
+                                    <p className="font-medium text-gray-900">Nimekiri usaldusväärsetes teenusepakkujatest</p>
+                                    <p className="text-gray-500">kes aitavad sul kohe sobivat toetust taotlema hakata</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div>
+                                <Button 
+                                  id="buy-report-button" 
+                                  className="bg-orange-600 hover:bg-orange-700 text-white shadow-sm whitespace-nowrap"
+                                  onClick={handlePayment}
+                                  disabled={isPaymentProcessing}
+                                >
+                                  {isPaymentProcessing ? 'Töötleb...' : 'Osta raport 5€'}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {processedGrants.map((grant: Grant, index: number) => (
+                    <TableRow 
+                      key={index}
+                      className={`bg-white hover:bg-gray-50/50 transition-all duration-500 ${
+                        visibleRows.includes(index) ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    >
+                      <TableCell className="border-r h-[52px]">
+                        {getStatusBadge(grant.status)}
+                      </TableCell>
+                      <TableCell className="border-r font-medium">
+                        <span className="text-emerald-600 hover:opacity-75 transition-opacity cursor-help" title="Sobivuse skoor põhineb teie ettevõtte profiilist">
+                          {grant.suitability}
                         </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="border-r text-gray-600">
-                      {grant.name && (
-                        <span className={isBlurred ? "blur-[2px] opacity-60" : ""}>
-                          {isBlurred ? "••••••" : grant.name}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="border-r text-gray-600">
-                      {grant.amount && (
-                        <span className={isBlurred ? "blur-[2px] opacity-60" : ""}>
-                          {isBlurred ? "••••••" : grant.amount}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="border-r text-gray-600">
-                      {grant.opened && (
-                        <span className={isBlurred ? "blur-[2px] opacity-60" : ""}>
-                          {isBlurred ? "••••••" : grant.opened}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-gray-600">
-                      {grant.closes && (
-                        <span className={isBlurred ? "blur-[2px] opacity-60" : ""}>
-                          {isBlurred ? "••••••" : grant.closes}
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell className="border-r text-gray-600">
+                        {grant.provider && (
+                          <span className={!userEmail ? "blur-[2px] opacity-60" : ""}>
+                            {!userEmail ? "••••••" : grant.provider}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="border-r text-gray-600">
+                        {grant.name && (
+                          <span className={!userEmail ? "blur-[2px] opacity-60" : ""}>
+                            {!userEmail ? "••••••" : grant.name}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="border-r text-gray-600">
+                        {grant.amount && (
+                          <span className={!userEmail ? "blur-[2px] opacity-60" : ""}>
+                            {!userEmail ? "••••••" : grant.amount}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="border-r text-gray-600">
+                        {grant.opened && (
+                          <span className={!userEmail ? "blur-[2px] opacity-60" : ""}>
+                            {!userEmail ? "••••••" : grant.opened}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-gray-600">
+                        {grant.closes && (
+                          <span className={!userEmail ? "blur-[2px] opacity-60" : ""}>
+                            {!userEmail ? "••••••" : grant.closes}
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </>
               )}
             </TableBody>
           </Table>

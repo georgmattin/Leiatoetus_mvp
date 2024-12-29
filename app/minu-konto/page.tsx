@@ -34,8 +34,8 @@ export default function SobivadToetusedPage() {
       
       setIsLoading(false)
     }
-
-    checkUser()
+    setIsLoading(false)
+    //checkUser()
   }, [router])
 
   useEffect(() => {
