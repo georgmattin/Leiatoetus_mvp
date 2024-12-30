@@ -3,6 +3,10 @@
 import React, { useState } from "react";
 import { Search, X, Loader2 } from "lucide-react"; // Add Loader2 import
 import { useRouter } from 'next/navigation'; // Add router import
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+
+const API_PROCESS_COMPANY = "http://localhost:5000/api/process-company";
 
 interface EmailPopupProps {
   isOpen: boolean;
@@ -13,6 +17,7 @@ interface EmailPopupProps {
 
 const EmailPopup: React.FC<EmailPopupProps> = ({ isOpen, onClose, onSubmit, registryCode }) => {
   const router = useRouter();
+  const supabase = createClientComponentClient();
   const [email, setEmail] = useState("");
   const [acceptMarketing, setAcceptMarketing] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -27,16 +32,69 @@ const EmailPopup: React.FC<EmailPopupProps> = ({ isOpen, onClose, onSubmit, regi
     setIsAnalyzing(true);
     
     try {
-      const response = await fetch('http://localhost:5000/api/process-company', {
+      // 1. First check if user is already logged in
+      const { data: { user: existingUser }, error: existingUserError } = await supabase.auth.getUser();
+      
+      let userId: string | null = existingUser?.id || null;
+      let userEmail: string = existingUser?.email as string || email;
+
+      // Only proceed with signup/signin if no user is logged in
+      if (!userId) {
+        // Generate a random password for the user
+        const generatedPassword = Math.random().toString(36).slice(-12);
+
+        // Try to sign up the user
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: email,
+          password: generatedPassword,
+          options: {
+            emailRedirectTo: `${window.location.origin}`,
+            data: {
+              acceptMarketing: acceptMarketing
+            }
+          }
+        });
+
+        if (signUpError) {
+          // If user already exists, try to sign in
+          if (signUpError.message.includes('User already registered')) {
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: email,
+              password: generatedPassword,
+            });
+
+            if (signInError) {
+              throw new Error('Sisselogimine ebaõnnestus');
+            }
+          } else {
+            throw signUpError;
+          }
+        }
+
+        // Get the new user's ID
+        const { data: { user: newUser }, error: userError } = await supabase.auth.getUser();
+        if (userError || !newUser) {
+          throw new Error('Kasutaja info päring ebaõnnestus');
+        }
+        userId = newUser.id;
+        userEmail = newUser.email as string || email;
+      }
+
+      if (!userId) {
+        throw new Error('Kasutaja ID puudub');
+      }
+
+      // Make the API call with user ID
+      const response = await fetch(API_PROCESS_COMPANY, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer toetus_api_key', // Make sure this matches your backend expected token
+          'Authorization': 'Bearer toetus_api_key',
           'Accept': 'application/json'
         },
         body: JSON.stringify({
           company_registry_code: registryCode,
-          email: email
+          user_id: userId
         })
       });
 
@@ -51,19 +109,19 @@ const EmailPopup: React.FC<EmailPopupProps> = ({ isOpen, onClose, onSubmit, regi
       
       const data = await response.json();
       
-      if (data.status === 'success' && data.access_token) {
+      if (data.status === 'success' && data.user_id) {
         // Show success message temporarily
         setApiResponse({
-          message: data.message || 'Analüüs õnnestus!',
+          message: 'Analüüs õnnestus! Suuname sind tulemuste lehele...',
           status: 'success'
         });
         setIsAnalyzing(false);
 
         // Delay the redirect so user can see the message
         setTimeout(() => {
-          onSubmit({ email, acceptMarketing });
-          router.push(`/sobivad-toetused?token=${data.access_token}`);
-        }, 2000);
+          onSubmit({ email: userEmail, acceptMarketing });
+          router.push(`/sobivad-toetused?user_id=${data.user_id}`);
+        }, 3000);
       }
     } catch (error) {
       console.error('API Error:', error);

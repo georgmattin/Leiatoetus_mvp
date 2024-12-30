@@ -2,42 +2,66 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useRouter } from 'next/navigation'
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  
+  const router = useRouter()
+  const supabase = createClientComponentClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError('')
+    setError(null)
 
     try {
-      const response = await fetch('http://localhost:5000/api/admin-login', {
-        method: 'POST', 
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer toetus_api_key'
-        },
-        body: JSON.stringify({
-          email,
-          password
-        })
+      // Try to sign in
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password
       })
 
-      const data = await response.json()
-
-      if (data.status === 'success') {
-        // Store token and redirect
-        localStorage.setItem('adminToken', data.access_token)
-        window.location.href = '/admin-grants-panel'
-      } else {
-        setError(data.message || 'Login failed. Please check your credentials.')
+      if (signInError) {
+        console.error('Sign in error:', signInError)
+        setError('Invalid email or password')
+        return
       }
+
+      if (!signInData.user) {
+        setError('Login failed')
+        return
+      }
+
+      // Get user metadata to check if super admin
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        console.error('Failed to get user details:', userError)
+        await supabase.auth.signOut()
+        setError('Failed to verify admin status')
+        return
+      }
+
+      // Check if user is super admin
+      if (!user.app_metadata?.is_super_admin) {
+        console.error('Not a super admin user')
+        await supabase.auth.signOut()
+        setError('Unauthorized access')
+        return
+      }
+
+      // Navigate to admin panel
+      router.push('/admin-grants-panel')
+      router.refresh()
+      
     } catch (err) {
-      setError('Login failed. Please try again later.')
+      console.error('Login error:', err)
+      setError('An unexpected error occurred')
     } finally {
       setLoading(false)
     }
@@ -114,21 +138,6 @@ export default function AdminLogin() {
               </div>
             ) : 'Login'}
           </button>
-
-          {error && (
-            <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4 animate-fadeIn">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
         </form>
       </div>
     </div>
