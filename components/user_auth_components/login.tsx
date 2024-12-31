@@ -9,7 +9,11 @@ import Link from "next/link"
 import { useRouter } from 'next/navigation'
 import { supabase } from "@/lib/supabaseClient"
 
-export default function LoginForm() {
+interface LoginFormProps {
+  onLoginSuccess?: () => void;
+}
+
+export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -40,9 +44,12 @@ export default function LoginForm() {
       }
 
       if (data?.user) {
-        // Õnnestunud sisselogimine
-        router.push('/minu-konto')
-        router.refresh() // Värskendame sessiooni
+        if (onLoginSuccess) {
+          onLoginSuccess() // Kutsu callback välja eduka sisselogimise korral
+        } else {
+          router.push('/minu-konto')
+          router.refresh()
+        }
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Sisselogimine ebaõnnestus')

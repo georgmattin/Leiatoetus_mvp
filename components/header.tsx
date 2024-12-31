@@ -91,19 +91,6 @@ const Header = () => {
                 </Link>
               </li>
 
-              {/* Kasulikku lugemist */}
-              <li>
-                <Link
-                  href="/kasulikku-lugemist"
-                  className={`font-bold text-[19.2px] ${
-                    pathname === "/kasulikku-lugemist"
-                      ? "text-[#3F5DB9]"
-                      : "text-[#133248]"
-                  } hover:text-[#3F5DB9]`}
-                >
-                  Kasulikku lugemist
-                </Link>
-              </li>
 
               {/* Meist */}
               <li>
