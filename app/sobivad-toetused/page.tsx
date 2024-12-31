@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti'
 import Header from "@/components/header";
 import MobileHeader from "@/components/mobileheader";
 import { ClockIcon, DocumentMagnifyingGlassIcon, CurrencyEuroIcon } from '@heroicons/react/24/outline'
+import { supabase } from "@/lib/supabaseClient"
 
 const debug = (area: string, message: string, data?: any) => {
   console.group(`🔍 ${area}`);
@@ -124,29 +125,47 @@ export default function SobivadToetusedPage() {
 
   useEffect(() => {
     const fetchAnalysis = async () => {
-      const token = searchParams.get('token');
-      debug('Auth', 'Token from URL', { token: token?.substring(0, 10) + '...' });
-
-      if (!token) {
-        debug('Error', 'No token provided');
-        setError('No token provided');
-        setIsLoading(false);
-        return;
-      }
+      const urlUserId = searchParams.get('user_id');
+      debug('Auth', 'User ID from URL', { urlUserId });
 
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const isAuthenticated = !!session?.user;
+        
+        if (isAuthenticated && session.user) {
+          console.log('Auth', 'User ID', { id: session.user.id });
+          console.log('Auth', 'User Email', { email: session.user.email });
+        }
+
+        const userId = urlUserId || session?.user?.id;
+        console.log('Auth', 'FINAL User ID', { id: userId });
+        
+        if (!userId) {
+          debug('Error', 'No user ID available - user not authenticated');
+          setError('Please log in to view analysis');
+          setIsLoading(false);
+          return;
+        }
+
         debug('API', 'Starting API call');
         const response = await fetch('http://localhost:5000/api/get-company-analysis', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          }
+            'Authorization': `Bearer leiatoetusgu4SGC8HNgH9WbiRgQ3hjamDrh4hpSUKMK7vWIjkzJt4hAfH2i99otpohjEzfEpMwKXjpNxhfZ9EB0qBOAKxtFqQ2ZLd6TWLFxuiEIklYshjMTn7ONFa7j`,
+          },
+          body: JSON.stringify({ user_id: userId })
         });
 
         if (!response.ok) {
           debug('API Error', `Response status: ${response.status}`, await response.text());
-          throw new Error('Failed to fetch analysis');
+          if (response.status === 401) {
+            throw new Error('Authentication failed - please log in again');
+          } else if (response.status === 404) {
+            throw new Error('No analysis found for this user');
+          } else {
+            throw new Error('Failed to fetch analysis');
+          }
         }
 
         const data = await response.json();

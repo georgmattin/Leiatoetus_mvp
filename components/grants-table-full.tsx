@@ -260,13 +260,6 @@ const GrantsTable: React.FC<GrantsTableProps> = ({ grantsData }) => {
 
   return (
     <div id="grants-table-wrapper" className="w-full">
-      {!userEmail && (
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-          <p className="text-blue-700">
-            Täieliku info nägemiseks palun <a href="/logi-sisse" className="font-bold underline">logige sisse</a> või <a href="/loo-konto" className="font-bold underline">looge konto</a>.
-          </p>
-        </div>
-      )}
       <div id="grants-table-container" className="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <Table>
