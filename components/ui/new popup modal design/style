@@ -1,0 +1,187 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { X, Bell, Mail, ArrowRight, Check, Loader2 } from 'lucide-react'
+
+interface TeavitusModalProps {
+  isOpen: boolean
+  onClose: () => void
+  userId: string
+  companyName: string
+  companyRegistryCode: number | null
+  oneTimeOrderId: string
+}
+
+export default function TeavitusModal4({
+  isOpen,
+  onClose,
+  userId,
+  companyName,
+  companyRegistryCode,
+  oneTimeOrderId,
+}: TeavitusModalProps) {
+  const [mounted, setMounted] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      setMounted(true)
+      document.body.style.overflow = 'hidden'
+    } else {
+      const timer = setTimeout(() => setMounted(false), 300)
+      document.body.style.overflow = 'unset'
+      return () => clearTimeout(timer)
+    }
+  }, [isOpen])
+
+  const handleActivateClick = async () => {
+    try {
+      setIsLoading(true)
+      if (!companyRegistryCode) {
+        console.error('Company registry code is missing')
+        return
+      }
+
+      localStorage.setItem('pending_teavitus_order_id', oneTimeOrderId)
+      localStorage.setItem('pending_teavitus_user_id', userId)
+
+      const response = await fetch('/api/stripe/create-payment-link', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          companyName,
+          companyRegistryCode,
+          oneTimeOrderId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        console.error('Error:', data.error)
+        return
+      }
+
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error('Error creating payment link:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (!mounted) return null
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 bg-black/40 ${
+        isOpen ? 'opacity-100' : 'opacity-0'
+      } transition-all duration-300`}
+    >
+      <div className="fixed left-[50%] top-[50%] z-50 w-full max-w-xl translate-x-[-50%] translate-y-[-50%] p-6">
+        <div className="relative overflow-hidden rounded-2xl bg-white shadow-xl">
+          <div className="relative p-8">
+            {/* Close Button */}
+            <div className="absolute right-4 top-4">
+              <button
+                onClick={onClose}
+                className="rounded-lg p-2 text-gray-400 transition-colors hover:text-gray-500"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Label */}
+            <div className="mb-2">
+              <span className="text-sm font-medium uppercase tracking-wide text-emerald-600">
+                Teavitused
+              </span>
+            </div>
+
+            {/* Title */}
+            <h2 className="mb-4 text-3xl font-bold tracking-tight text-gray-900">
+              Teavituste tellimine
+            </h2>
+
+            {/* Description */}
+            <p className="mb-8 text-base leading-relaxed text-gray-600">
+              Teavituste teenus hoiab sind kursis sobilike toetuste avanemisega.
+              Analüüsime sinu ettevõtte profiili igakuiselt ja teavitame sind e-posti
+              teel, kui avanevad sinu ettevõttele sobivad toetused.
+            </p>
+
+            {/* Features Section */}
+            <div className="mb-8">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900">
+                Teenus sisaldab:
+              </h3>
+              <ul className="space-y-4">
+                <li className="flex items-start gap-3">
+                  <div className="mt-1 rounded-full bg-emerald-100 p-1">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <span className="text-base text-gray-600">
+                    Igakuine automaatne sobivusanalüüs
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="mt-1 rounded-full bg-emerald-100 p-1">
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <span className="text-base text-gray-600">
+                    E-posti teavitused uutest toetustest
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Price Section */}
+            <div className="mb-8">
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-bold text-gray-900">15€</span>
+                <span className="text-lg text-gray-600">/kuu</span>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">* Lisandub km 22%</p>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleActivateClick}
+                disabled={isLoading}
+                className="relative w-full rounded-full bg-emerald-600 px-8 py-4 text-base font-semibold text-white transition-all hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <span className="inline-flex items-center justify-center">
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      <span>Aktiveerimine...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-lg mr-1">+</span>
+                      <span>Aktiveeri teavitus</span>
+                    </>
+                  )}
+                </span>
+              </button>
+              <button
+                onClick={onClose}
+                disabled={isLoading}
+                className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white px-8 py-4 text-base font-semibold text-gray-700 transition-all hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Tagasi
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+

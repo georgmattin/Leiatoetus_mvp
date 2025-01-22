@@ -1,106 +1,76 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        console.log("Request body:", body);
-
-        // Validate environment variables
-        if (!process.env.MONTONIO_ACCESS_KEY) {
-            throw new Error('MONTONIO_ACCESS_KEY is not set');
-        }
-        if (!process.env.MONTONIO_SECRET_KEY) {
-            throw new Error('MONTONIO_SECRET_KEY is not set');
-        }
-        if (!process.env.NEXT_PUBLIC_RETURN_URL) {
-            throw new Error('NEXT_PUBLIC_RETURN_URL is not set');
-        }
-        if (!process.env.NEXT_PUBLIC_NOTIFICATION_URL) {
-            throw new Error('NEXT_PUBLIC_NOTIFICATION_URL is not set');
+        console.log('Received request body:', body);
+        
+        const { formData, orderId, registryCode } = body;
+        
+        if (!orderId) {
+            throw new Error('orderId on puudu');
         }
 
-        // Get user from Supabase
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            throw new Error('User not authenticated');
+        // Kontrollime keskkonnamuutujaid
+        if (!process.env.MONTONIO_ACCESS_KEY || !process.env.MONTONIO_SECRET_KEY) {
+            throw new Error('Montonio kredentsiaalid on puudu');
         }
 
-        const merchantReference = `order-${Date.now()}`;
+        const supabase = createRouteHandlerClient({ cookies });
+        
+        // Kontrollime one_time_orders tabelist tellimuse olemasolu
+        const { data: orderData, error: orderError } = await supabase
+            .from('one_time_orders')
+            .select('*')
+            .eq('id', orderId)
+            .single();
 
-        // Create order payload
+        if (orderError || !orderData) {
+            throw new Error('Tellimust ei leitud');
+        }
+
+        // Montonio makse payload absoluutse miinimumiga
         const orderPayload = {
-            merchant_reference: merchantReference,
-            access_key: process.env.MONTONIO_ACCESS_KEY,
-            return_url: process.env.NEXT_PUBLIC_RETURN_URL,
-            notification_url: process.env.NEXT_PUBLIC_NOTIFICATION_URL,
-            currency: 'EUR',
-            grand_total: 5.00,
-            locale: 'et',
-            billing_address: {
-                first_name: 'Test',
-                last_name: 'User',
-                email: body.email,
-                locality: 'Tallinn',
-                region: 'Harjumaa',
-                country: 'EE',
-                postal_code: '10111',
-            },
-            line_items: [
-                {
-                    name: 'Toetuste raport',
-                    quantity: 1,
-                    final_price: 5.00,
-                },
-            ],
+            accessKey: process.env.MONTONIO_ACCESS_KEY,
+            merchantReference: orderId,
+            returnUrl: process.env.NEXT_PUBLIC_BASE_URL + "/payment/success",
+            notificationUrl: process.env.NEXT_PUBLIC_NOTIFICATION_URL,
+            currency: "EUR",
+            grandTotal: 35.00,
+            locale: "et",
             payment: {
-                method: 'paymentInitiation',
-                amount: 5.00,
-                currency: 'EUR',
-                method_options: {
-                    payment_description: 'Toetuste raport',
-                },
-            },
-            merchant_reference_display: 'Toetuste raport',
+                method: "paymentInitiation",
+                amount: 35.00,
+                currency: "EUR"
+            }
         };
 
-        console.log("Order payload:", orderPayload);
+        // Salvestame user_id ja registry_code andmebaasi
+        try {
+            const { error: updateError } = await supabase
+                .from('one_time_orders')
+                .update({ 
+                    registry_code: registryCode,
+                    payment_status: 'pending'
+                })
+                .eq('id', orderId);
 
-        // Create initial payment record in Supabase
-        const { error: insertError } = await supabase
-            .from('report_purchases')
-            .insert({
-                user_id: user.id,
-                payment_reference: merchantReference,
-                payment_status: 'pending',
-                payment_amount: 5.00,
-                payment_currency: 'EUR',
-                expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+            if (updateError) {
+                throw new Error(`Tellimuse uuendamine ebaõnnestus: ${updateError.message}`);
+            }
+
+            const token = jwt.sign(orderPayload, process.env.MONTONIO_SECRET_KEY, {
+                algorithm: 'HS256',
+                expiresIn: '10m'
             });
 
-        if (insertError) {
-            console.error('Failed to create payment record:', insertError);
-            throw new Error('Failed to create payment record');
-        }
+            console.log('Generated token:', token);
+            console.log('Sending payload to Montonio:', orderPayload);
 
-        // Sign the payload with JWT
-        const token = jwt.sign(orderPayload, process.env.MONTONIO_SECRET_KEY, {
-            algorithm: 'HS256',
-            expiresIn: '10m',
-        });
-
-        console.log("Generated token:", token);
-
-        try {
-            // Make request to Montonio API
             const montonioResponse = await axios.post(
                 'https://sandbox-stargate.montonio.com/api/orders',
                 { data: token },
@@ -112,27 +82,38 @@ export async function POST(request: Request) {
                 }
             );
 
-            console.log("Montonio response:", montonioResponse.data);
+            console.log('Full Montonio response:', montonioResponse);
+            console.log('Montonio response data:', montonioResponse.data);
 
             if (!montonioResponse.data.paymentUrl) {
-                throw new Error('No payment URL in response');
+                console.error('Missing paymentUrl in response:', montonioResponse.data);
+                throw new Error('Montonio ei tagastanud makse URL-i');
             }
 
             return NextResponse.json({ paymentUrl: montonioResponse.data.paymentUrl });
-        } catch (axiosError: any) {
-            if (axiosError.response?.data) {
-                console.error("Montonio API error response:", axiosError.response.data);
-                throw new Error(axiosError.response.data.message || 'Payment initiation failed');
-            }
-            throw axiosError;
+        } catch (montonioError: any) {
+            console.error('Detailed Montonio error:', {
+                message: montonioError.message,
+                response: montonioError.response?.data,
+                status: montonioError.response?.status,
+                headers: montonioError.response?.headers,
+                config: montonioError.config
+            });
+            throw new Error(`Montonio API viga: ${montonioError.response?.data?.message || montonioError.message}`);
         }
     } catch (error: any) {
-        console.error("Payment creation error:", error);
+        console.error('Final error:', {
+            message: error.message,
+            stack: error.stack,
+            cause: error.cause
+        });
+        
         return NextResponse.json(
             { 
-                error: 'Failed to create order', 
-                details: error.message 
-            }, 
+                error: 'Makse loomine ebaõnnestus', 
+                details: error.message,
+                stack: error.stack 
+            },
             { status: 500 }
         );
     }

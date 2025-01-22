@@ -1,0 +1,84 @@
+Ettevõtja lihtandmete päring (Staatuse päring)
+Soovides pakkuda Teile tulevikus paremat äriregistri avaandmete kasutamise kogemust, oleme tänulikud, kui leiate aega, et anda meile tagasisidet. Küsimustele saate vastata siin.
+
+
+Päringu nimi: arireg.lihtandmed_v2
+Selgitus: ettevõtte kehtivad üldandmed piiratud mahus (staatuse päring)
+Lisainfo: kasutusel alates 01.05.2017. Nime järgi otsimisel tagastatakse maksimaalselt 100 kirjet.
+XSD: http://www2.rik.ee/schemas/xtee6/arireg/live/xroad6_lihtandmed_v2.xsd
+
+Sisendparameetrid ja otsingutingimused
+Nimetus	Tähendus	Märkused
+ariregister_kasutajanimi	Äriregistri kasutajanimi	(kohustuslik)
+ariregister_parool	Äriregistri parool	(kohustuslik)
+ariregister_valjundi_formaat	Väljundi formaat	"json" või "xml". Vaikimisi xml.
+evnimi	Ärinimi	
+ariregistri_kood	Registrikood	
+evarv	Tulemuste maksimaalne arv	
+keel	Keel	Väärtus est või eng
+Väljundandmed
+Ettevõtja nimi
+Ettevõtja kehtetud ärinimed
+Ettevõtja registrikood
+Ettevõtja staatus äriregistris
+Registripiirkond
+Ettevõtja kapital
+Ettevõtja aadress
+Esmaregistreerimise kuupäev (so kuupäev, mil esmakordselt kanti kohturegistrisse)
+Näidispäring
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:iden="http://x-road.eu/xsd/identifiers" xmlns:prod="http://arireg.x-road.eu/producer/" xmlns:xro="http://x-road.eu/xsd/xroad.xsd">
+ <soapenv:Body>
+ <prod:lihtandmed_v2>
+ <prod:keha>
+ <prod:ariregister_kasutajanimi>kasutajanimi</prod:ariregister_kasutajanimi>
+ <prod:ariregister_parool>parool</prod:ariregister_parool>
+ <prod:ariregistri_kood>70000310</prod:ariregistri_kood>
+ </prod:keha>
+ </prod:lihtandmed_v2>
+ </soapenv:Body>
+</soapenv:Envelope>
+Näidisvastus
+<?xml version="1.0" encoding="UTF-8"?>
+<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:SOAP-ENC="http://schemas.xmlsoap.org/soap/encoding/" xmlns:ZSI="http://www.zolera.com/schemas/ZSI/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ <SOAP-ENV:Header />
+ <SOAP-ENV:Body xmlns:ns1="http://arireg.x-road.eu/producer/">
+ <ns1:lihtandmed_v2Response>
+ <ns1:paring>
+ <ns1:ariregister_kasutajanimi>kasutajanimi</ns1:ariregister_kasutajanimi>
+ <ns1:ariregister_parool>parool</ns1:ariregister_parool>
+ <ns1:ariregistri_kood>70000310</ns1:ariregistri_kood>
+ </ns1:paring>
+ <ns1:keha>
+ <ns1:ettevotjad>
+ <ns1:item>
+ <ns1:evnimi>Registrite ja Infosüsteemide Keskus</ns1:evnimi>
+ <ns1:oiguslik_vorm>TRAS</ns1:oiguslik_vorm>
+ <ns1:oiguslik_vorm_tekstina>Täidesaatva riigivõimu asutus või riigi muu institutsioon</ns1:oiguslik_vorm_tekstina>
+ <ns1:oigusliku_vormi_alaliik>MHRA</ns1:oigusliku_vormi_alaliik>
+ <ns1:oigusliku_vormi_alaliik_tekstina>Ministeeriumi hallatav riigiasutus</ns1:oigusliku_vormi_alaliik_tekstina>
+ <ns1:ariregistri_kood>70000310</ns1:ariregistri_kood>
+ <ns1:staatus>R</ns1:staatus>
+ <ns1:staatus_tekstina>Registrisse kantud</ns1:staatus_tekstina>
+ <ns1:registrist_kustutamise_aeg xsi:nil="1" />
+ <ns1:piirkond>5</ns1:piirkond>
+ <ns1:piirkond_tekstina>Tartu</ns1:piirkond_tekstina>
+ <ns1:evaadressid>
+ <ns1:asukoht_ettevotja_aadressis>Lõkke tn 4</ns1:asukoht_ettevotja_aadressis>
+ <ns1:asukoha_ehak_kood>0298</ns1:asukoha_ehak_kood>
+ <ns1:asukoha_ehak_tekstina>Tallinn</ns1:asukoha_ehak_tekstina>
+ <ns1:indeks_ettevotja_aadressis>19081</ns1:indeks_ettevotja_aadressis>
+ <ns1:aadress_ads__ads_oid>ME01086941</ns1:aadress_ads__ads_oid>
+ <ns1:aadress_ads__adr_id>2252099</ns1:aadress_ads__adr_id>
+ <ns1:aadress_ads__ads_normaliseeritud_taisaadress>Harju maakond, Tallinn, Kesklinna linnaosa, Lõkke tn 4</ns1:aadress_ads__ads_normaliseeritud_taisaadress>
+ <ns1:aadress_ads__adob_id>7124345</ns1:aadress_ads__adob_id>
+ <ns1:aadress_ads__koodaadress>3778402980000049K00001E4400000000</ns1:aadress_ads__koodaadress>
+ </ns1:evaadressid>
+ <ns1:esmakande_aeg>23.09.1998</ns1:esmakande_aeg>
+ </ns1:item>
+ </ns1:ettevotjad>
+ <ns1:leitud_ettevotjate_arv>1</ns1:leitud_ettevotjate_arv>
+ </ns1:keha>
+ </ns1:lihtandmed_v2Response>
+ </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>

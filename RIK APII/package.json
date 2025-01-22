@@ -1,0 +1,11 @@
+{
+  "name": "rik-lihtandmed",
+  "version": "1.0.0",
+  "description": "RIK äriregistri lihtandmete päring",
+  "main": "lihtandmed.js",
+  "dependencies": {
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.1",
+    "fast-xml-parser": "^4.3.4"
+  }
+} 

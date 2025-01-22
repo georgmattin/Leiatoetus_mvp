@@ -1,12 +1,25 @@
 'use client'
+import { motion } from "framer-motion"
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import GrantsTable from '@/components/grants-table-full'
+import { GrantsTable } from '@/components/grants-table'
 import confetti from 'canvas-confetti'
 import Header from "@/components/header";
 import MobileHeader from "@/components/mobileheader";
 import { ClockIcon, DocumentMagnifyingGlassIcon, CurrencyEuroIcon } from '@heroicons/react/24/outline'
 import { supabase } from "@/lib/supabaseClient"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import CompareResultsModal from '@/components/compare-results-modal';
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { ArrowRight, LockIcon } from 'lucide-react'
+import Footer from "@/components/footer"
+import { DemoPopup } from "@/components/demo-popup"
+import { OrderPopup } from "@/components/popups/OrderPopup"
+
+// Lisa API võti
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
 const debug = (area: string, message: string, data?: any) => {
   console.group(`🔍 ${area}`);
@@ -123,62 +136,84 @@ export default function SobivadToetusedPage() {
   const [allAnimationsComplete, setAllAnimationsComplete] = useState(false)
   const [dataFullyLoaded, setDataFullyLoaded] = useState(false);
 
+  const [session, setSession] = useState<any>(null);
+
+  const supabase = createClientComponentClient();
+
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [compareResults, setCompareResults] = useState<{
+    orderId: string;
+    analysisDate: string;
+    newGrants: string[];
+  }[]>([]);
+  const [currentAnalysisDate, setCurrentAnalysisDate] = useState<string>('');
+
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+
+  // Lisa uus state demo popupi jaoks
+  const [showDemoPopup, setShowDemoPopup] = useState(false);
+
+  const [showOrderPopup, setShowOrderPopup] = useState(false)
+
+  const handleOrderSubmit = (formData: OrderFormData) => {
+    // Siin käitleme tellimuse andmeid
+    console.log('Tellimuse andmed:', formData)
+    // Suuname kasutaja maksma
+    // ...
+  }
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Page session:', session);
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Page auth state changed:', session);
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     const fetchAnalysis = async () => {
-      const urlUserId = searchParams.get('user_id');
-      debug('Auth', 'User ID from URL', { urlUserId });
+      const userId = searchParams.get('user_id');
+      const orderId = searchParams.get('order_id');
+
+      if (!userId || !orderId) {
+        setError('Vajalikud parameetrid puuduvad');
+        setIsLoading(false);
+        return;
+      }
 
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const isAuthenticated = !!session?.user;
-        
-        if (isAuthenticated && session.user) {
-          console.log('Auth', 'User ID', { id: session.user.id });
-          console.log('Auth', 'User Email', { email: session.user.email });
-        }
-
-        const userId = urlUserId || session?.user?.id;
-        console.log('Auth', 'FINAL User ID', { id: userId });
-        
-        if (!userId) {
-          debug('Error', 'No user ID available - user not authenticated');
-          setError('Please log in to view analysis');
-          setIsLoading(false);
-          return;
-        }
-
-        debug('API', 'Starting API call');
         const response = await fetch('http://localhost:5000/api/get-company-analysis', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer leiatoetusgu4SGC8HNgH9WbiRgQ3hjamDrh4hpSUKMK7vWIjkzJt4hAfH2i99otpohjEzfEpMwKXjpNxhfZ9EB0qBOAKxtFqQ2ZLd6TWLFxuiEIklYshjMTn7ONFa7j`,
+            'Authorization': `Bearer ${API_KEY}`,
           },
-          body: JSON.stringify({ user_id: userId })
+          body: JSON.stringify({
+            user_id: userId,
+            order_id: orderId
+          })
         });
 
         if (!response.ok) {
-          debug('API Error', `Response status: ${response.status}`, await response.text());
-          if (response.status === 401) {
-            throw new Error('Authentication failed - please log in again');
-          } else if (response.status === 404) {
-            throw new Error('No analysis found for this user');
-          } else {
-            throw new Error('Failed to fetch analysis');
-          }
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Viga analüüsi laadimisel');
         }
 
         const data = await response.json();
-        debug('API Response', 'Raw API response', data);
-
+        
         if (data.status === 'success' && data.data.length > 0) {
-          debug('Data Processing', 'Processing analysis data', data.data);
-  
           // Transform the data
           const transformedGrantsData = transformAnalysisToGrantsData(data.data);
-          debug('Data Processing', 'Transformed grants data', transformedGrantsData);
           
-          // Calculate total amount using the first analysis entry
+          // Calculate total amount
           const totalAmount = calculateTotalGrants({
             grants_data: transformedGrantsData
           });
@@ -191,24 +226,19 @@ export default function SobivadToetusedPage() {
             grants_data: transformedGrantsData
           });
 
-          debug('Calculations', 'Processed values', {
-            companyName: data.data[0].company_name,
-            resultsCount: data.data.length,
-            totalAmount,
-          });
-
           setCompanyName(data.data[0].company_name);
           setResultsCount(data.data.length.toString());
           setGrantsTotal(totalAmount.toString());
 
           setTimeout(() => {
-            debug('State', 'Data fully loaded');
-            setDataFullyLoaded(true)
+            setDataFullyLoaded(true);
           }, 2500);
+        } else {
+          throw new Error('Analüüsi andmed puuduvad');
         }
-      } catch (err) {
-        debug('Error', 'Error in fetchAnalysis', err);
-        setError(err instanceof Error ? err.message : 'An error occurred');
+      } catch (error) {
+        console.error('Viga analüüsi laadimisel:', error);
+        setError(error instanceof Error ? error.message : 'Viga analüüsi laadimisel');
       } finally {
         setIsLoading(false);
       }
@@ -334,6 +364,214 @@ export default function SobivadToetusedPage() {
     return () => clearInterval(timer);
   }, [viewedGrants]);
 
+  const compareAnalyses = async () => {
+    try {
+      const orderId = searchParams.get('order_id');
+      const registryCode = analysisData?.company_registry_code;
+      const userId = searchParams.get('user_id');
+
+      if (!orderId || !registryCode || !userId) {
+        console.error('Required parameters missing:', { orderId, registryCode, userId });
+        return;
+      }
+
+      console.log('Fetching with params:', { orderId, registryCode, userId });
+
+      // 1. Võta praeguse tellimuse analüüsid
+      const { data: currentAnalyses, error: currentError } = await supabase
+        .from('company_analyses')
+        .select(`
+          id,
+          one_time_order_id,
+          company_registry_code,
+          user_id,
+          analysis_date,
+          analysis_json
+        `)
+        .eq('one_time_order_id', orderId)
+        .eq('user_id', userId)
+        .order('analysis_date', { ascending: false });
+
+      if (currentError) {
+        console.error('Error fetching current analyses:', currentError.message);
+        return;
+      }
+
+      console.log('Current analyses:', currentAnalyses);
+
+      if (!currentAnalyses || currentAnalyses.length === 0) {
+        console.log('No current analyses found');
+        return;
+      }
+
+      // Salvesta praeguse analüüsi kuupäev
+      setCurrentAnalysisDate(currentAnalyses[0].analysis_date);
+
+      // 2. Võta eelnevad analüüsid sama firma kohta
+      const { data: previousAnalyses, error: previousError } = await supabase
+        .from('company_analyses')
+        .select(`
+          id,
+          one_time_order_id,
+          company_registry_code,
+          user_id,
+          analysis_date,
+          analysis_json
+        `)
+        .eq('company_registry_code', registryCode)
+        .eq('user_id', userId)
+        .neq('one_time_order_id', orderId)
+        .order('analysis_date', { ascending: false });
+
+      if (previousError) {
+        console.error('Error fetching previous analyses:', previousError.message);
+        return;
+      }
+
+      console.log('Previous analyses:', previousAnalyses);
+
+      // Grupeeri analüüsid tellimuste kaupa
+      const previousAnalysesByOrder = previousAnalyses.reduce((acc, analysis) => {
+        if (!acc[analysis.one_time_order_id]) {
+          acc[analysis.one_time_order_id] = [];
+        }
+        acc[analysis.one_time_order_id].push(analysis);
+        return acc;
+      }, {});
+
+      // Võta praegused toetused
+      const currentGrants = new Set(
+        currentAnalyses.map(analysis => {
+          try {
+            const analysisJson = typeof analysis.analysis_json === 'string' 
+              ? JSON.parse(analysis.analysis_json) 
+              : analysis.analysis_json;
+            return analysisJson.grant_name;
+          } catch (e) {
+            console.error('Error parsing analysis JSON:', e);
+            return null;
+          }
+        }).filter(Boolean)
+      );
+
+      console.log('Current grants:', Array.from(currentGrants));
+
+      const results = [];
+
+      // Võrdle ja salvesta iga võrdlus
+      for (const [orderId, analyses] of Object.entries(previousAnalysesByOrder)) {
+        // Kontrolli, kas võrdlus on juba olemas
+        const { data: existingComparison } = await supabase
+          .from('analysis_comparisons')
+          .select('id')
+          .eq('current_analysis_id', currentAnalyses[0].id)
+          .eq('previous_analysis_id', analyses[0].id)
+          .single();
+
+        // Kui võrdlus on juba olemas, jätka järgmise võrdlusega
+        if (existingComparison) {
+          console.log('Comparison already exists, skipping:', {
+            current: currentAnalyses[0].id,
+            previous: analyses[0].id
+          });
+          continue;
+        }
+
+        const previousGrants = new Set(
+          analyses.map(analysis => {
+            try {
+              const analysisJson = typeof analysis.analysis_json === 'string' 
+                ? JSON.parse(analysis.analysis_json) 
+                : analysis.analysis_json;
+              return analysisJson.grant_name;
+            } catch (e) {
+              console.error('Error parsing analysis JSON:', e);
+              return null;
+            }
+          }).filter(Boolean)
+        );
+
+        // Leia uued toetused
+        const newGrants = Array.from(currentGrants).filter(grant => !previousGrants.has(grant));
+
+        // Salvesta ainult uus võrdlus
+        const { error: comparisonError } = await supabase
+          .from('analysis_comparisons')
+          .insert({
+            user_id: userId,
+            current_analysis_id: currentAnalyses[0].id,
+            previous_analysis_id: analyses[0].id,
+            new_grants: newGrants,
+            current_analysis_date: currentAnalyses[0].analysis_date,
+            previous_analysis_date: analyses[0].analysis_date
+          });
+
+        if (comparisonError) {
+          console.error('Error saving comparison:', comparisonError);
+        }
+
+        results.push({
+          orderId,
+          analysisDate: analyses[0].analysis_date,
+          newGrants
+        });
+      }
+
+      setCompareResults(results);
+      setShowCompareModal(true);
+
+    } catch (error) {
+      console.error('Error comparing analyses:', error);
+    }
+  };
+
+  const handlePayment = async () => {
+    console.group('💰 Payment Flow');
+    console.log('Payment button clicked');
+    
+    setIsPaymentProcessing(true);
+    try {
+      // Get the required data
+      const searchParams = new URLSearchParams(window.location.search);
+      const orderId = searchParams.get('order_id');
+      
+      // Make the request to create order
+      const response = await fetch('/api/createOrder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          registryCode: analysisData?.company_registry_code,
+          orderId: orderId,
+          email: session?.user?.email
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Payment initiation failed:', errorData);
+        throw new Error(errorData.details || 'Makse algatamine ebaõnnestus');
+      }
+
+      const data = await response.json();
+      console.log('Payment URL received:', data);
+
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        throw new Error('Payment URL not received');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert(error instanceof Error ? error.message : 'Makse algatamine ebaõnnestus');
+    } finally {
+      setIsPaymentProcessing(false);
+      console.groupEnd();
+    }
+  };
+
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
@@ -351,61 +589,155 @@ export default function SobivadToetusedPage() {
   }
 
   return (
-    <>
-    <Header/>
-    <MobileHeader />
-      <section id="intro-section" className="w-full bg-[#F6F9FC] md:px-0 pt-[50px] pb-[40px]">
-        <div className="max-w-[1200px] mx-auto px-[15px] md:px-[30px] py-[0px] bg-white/0 rounded-[15px]">
-          <div className="text-center">
-            <p className="text-[#133248] text-lg mb-2">{companyName}</p>
-            <h2 className="font-sans text-[38.78px] font-[800] text-[#133248] text-[#133248] leading-[50px]">
-              Leidsime <span className="text-[#3F5DB9]">{animatedResults}</span> sinu ettevõttele<br />
-              sobivat toetust
-            </h2>
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-[#ECFDF5] to-white m-5 rounded-lg">
+      <Header />
+
+      <div>
+        {/* Hero Section */}
+        <section>
+          <div className="max-w-[1200px] rounded mx-auto mt-12 mb-10 flex justify-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center gap-6 text-center"
+            >
+              <Badge 
+                variant="outline" 
+                className="w-fit text-[#008834] leading-[0px] border-[#008834] text-[16px] font-[600]"
+              >
+                ANALÜÜSI TULEMUSED
+              </Badge>
+              
+              <div className="space-y-2">
+                <h1 className="text-3xl font-[900] text-[#111827]">
+                  {companyName}
+                </h1>
+                <p className="text-[23.04px] text-[#111827]">
+                  Leidsime sulle <span className="text-[#008834] text-[27.65px] font-[900]">{animatedResults}</span> sobivat toetust
+                </p>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section id="stats-section" className="w-full bg-[#F6F9FC] px-[15px] md:px-0 py-[0px]">
-        <div className="max-w-[1200px] mx-auto px-[15px] md:px-[40px] py-[0px] bg-white/0 rounded-[15px]">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 justify-items-center">
-        
-        <div className="text-center md:col-span-1 w-full max-w-[380px] p-[20px] rounded-[10px] bg-white shadow-lg">
-          <ClockIcon className="h-12 w-12 text-[#3F5DB9] mx-auto mb-2" />
-          <p className="font-sans text-[47.78px] font-bold text-[#3F5DB9]">{animatedTime}h</p>
-          <p className="font-sans text-[16px] text-[#3F5DB9]">
-            <span className="font-[700]">KOKKUHOITUD AEG</span><br />toetuste otsimisel ja analüüsimisel
-          </p>
-        </div>
+        <main>
+          <div className="max-w-[1200px] mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className="space-y-8"
+            >
+              {/* Stats Grid */}
+              <div className="rounded-lg"> 
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {/* Leitud toetuste summa */}
+                  <div className="text-center md:col-span-1 w-full max-w-[380px] p-[20px] rounded-[10px] shadow-[4px_6px_10px] shadow-[#059669]/20">
+                    <h3 className="text-[38.16px] text-center font-[900] text-[#111827]">{animatedTotal}</h3>
+                    <p className="text-[19.2px] text-center text-[#111827] font-medium">Leitud toetuste <br /> kogusumma (€).</p>
+                  </div>
 
-        <div className="text-center md:col-span-1 w-full max-w-[380px] p-[20px] rounded-[10px] bg-white shadow-lg">
-          <CurrencyEuroIcon className="h-12 w-12 text-[#3F5DB9] mx-auto mb-2" />
-          <p className="font-sans text-[47.78px] font-bold text-[#3F5DB9]">{animatedTotal}€</p>
-          <p className="font-sans text-[16px] text-[#3F5DB9]">
-            <span className="font-[700]">LEITUD POTENTSIAALNE</span><br />toetuste kogusumma
-          </p>
-        </div>
+                  {/* Kokkuhoitud aeg */}
+                  <div className="text-center md:col-span-1 w-full max-w-[380px] p-[20px] rounded-[10px] shadow-[4px_6px_10px] shadow-[#059669]/20">
+                    <h3 className="text-[38.16px] text-center font-[900] text-[#111827]">{animatedTime}</h3>
+                    <p className="text-[19.2px] text-center text-[#111827] font-medium">Kokkuhoitud aeg <br />(tundides).</p>
+                  </div>
 
-        <div className="text-center md:col-span-1 w-full max-w-[380px] p-[20px] rounded-[10px] bg-white shadow-lg">
-          <DocumentMagnifyingGlassIcon className="h-12 w-12 text-[#3F5DB9] mx-auto mb-2" />
-          <p className="font-sans text-[47.78px] font-bold text-[#3F5DB9]">{animatedGrants}</p>
-          <p className="font-sans text-[16px] text-[#3F5DB9]">
-            <span className="font-[700]">LÄBIVAADATUD</span><br />toetuste arv
-          </p>
-        </div>
+                  {/* Läbivaadatud toetused */}
+                  <div className="text-center md:col-span-1 w-full max-w-[380px] p-[20px] rounded-[10px] shadow-[4px_6px_10px] shadow-[#059669]/20">
+                    <h3 className="text-[38.16px] text-center font-[900] text-[#111827]">{animatedGrants}</h3>
+                    <p className="text-[19.2px] text-center text-[#111827] font-medium">Läbivaadatud <br /> toetuste arv (tk).</p>
+                  </div>
 
+                  {/* Läbitöötatud materjalid */}
+                  <div className="text-center md:col-span-1 w-full max-w-[380px] p-[20px] rounded-[10px] shadow-[4px_6px_10px] shadow-[#059669]/20">
+                    <h3 className="text-[38.16px] text-center font-[900] text-[#111827]">136</h3>
+                    <p className="text-[19.2px] text-center text-[#111827] font-medium">A4 jagu läbitöötatud <br /> materjale.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grants Section */}
+              <div className="space-y-6 bg-white p-8 rounded-lg border border-[#059669]/20">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <h2 className="text-[23.04px] font-[500] text-[#1A1C22]">
+                      <span className="font-[900] text-[#008834]">{companyName}</span> sobivad toetused <span className="font-[900] text-[#008834]">({animatedResults}tk)</span>
+                    </h2>
+                  </div>
+                </div>
+
+                {/* Limited Info Banner */}
+                <Card className="p-8 bg-[#ECFDF5] border border-[#059669]/20 rounded-lg">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center space-x-4">
+                      <LockIcon className="h-8 w-8 text-[#059669] mr-4" />
+                      <div className="space-y-2">
+                        <h3 className="text-[23.04px] font-[700] text-[#111827]">
+                          Allpool näed piiratud infoga raportit!
+                        </h3>
+                        <p className="text-[#111827] text-[16px]">
+                          Osta täisraport ja saa ligipääs detailsele ülevaatele. <span className="text-[#059669] font-semibold hover:underline underline cursor-pointer">Mida sisaldab täisraport?</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <Button 
+                        variant="outline"
+                        className="text-[19.2px] bg-white text-black border border-[#008834]/20 p-4 hover:border-[#008834] hover:bg-white hover:text-[#008834]"
+                        onClick={() => setShowDemoPopup(true)}
+                      >
+                        Vaata demo
+                      </Button>
+                      
+                      <Button 
+                        className="bg-[#00884B] text-white px-6 py-2 text-[19.2px] rounded hover:bg-[#00884B]/90"
+                        onClick={() => setShowOrderPopup(true)}
+                      >
+                        Osta täisraport 35€
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Grants Table */}
+                <GrantsTable grants={analysisData?.grants_data ? 
+                  (Array.isArray(analysisData.grants_data) ? analysisData.grants_data : [analysisData.grants_data]).map(grant => ({
+                    status: "Avatud",
+                    suitability: `${Math.round((grant.overall_match_score || 0) * 100)}%`,
+                    provider: grant.grant_provider,
+                    name: grant.grant_title,
+                    amount: grant.grant_amount,
+                    period: grant.grant_close_date
+                  })) 
+                : []} />
+              </div>
+            </motion.div>
           </div>
-        </div>
-      </section>
+        </main>
+        <Footer />
+      </div>
 
-      <section id="grants-section" className="w-full bg-[#F6F9FC] px-[15px] md:px-0 py-[30px]">
-      <div id="grants-container" className="max-w-[1200px] mx-auto mb-[40px] px-[15px] md:px-[40px] py-[30px] bg-white rounded-[15px] shadow-lg">
-          <h1 id="grants-title" className="text-[27.65px] font-bold text-[#133248] mb-6">
-            <span className="text-[#3F5DB9]">{companyName}</span>-le sobivad toetused
-          </h1>
-          <GrantsTable grantsData={analysisData?.grants_data} />
-        </div>
-      </section>
-    </>
+      <CompareResultsModal
+        isOpen={showCompareModal}
+        onClose={() => setShowCompareModal(false)}
+        results={compareResults}
+        currentAnalysisDate={currentAnalysisDate || new Date().toISOString()}
+      />
+
+      {/* Lisa DemoPopup komponent */}
+      <DemoPopup 
+        isOpen={showDemoPopup}
+        onClose={() => setShowDemoPopup(false)}
+      />
+
+      <OrderPopup
+        isOpen={showOrderPopup}
+        onClose={() => setShowOrderPopup(false)}
+        onConfirm={handleOrderSubmit}
+        companyData={analysisData}
+      />
+    </div>
   )
 }

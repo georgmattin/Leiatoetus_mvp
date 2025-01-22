@@ -27,12 +27,13 @@ export default function PricingCard() {
           id: session.user.id
         })
 
-        // Kontrolli aktiivset tellimust
+        // Kontrolli tellimusi
         const { data: subscription } = await supabase
           .from('stripe_subscriptions')
           .select('*')
           .eq('email', session.user.email)
-          .eq('status', 'active')
+          .or(`status.eq.active,and(status.eq.cancelled,subscription_end_date.gt.${new Date().toISOString()})`)
+          .order('created_at', { ascending: false })
           .single()
 
         if (subscription) {
@@ -101,30 +102,39 @@ export default function PricingCard() {
 
   const handleCancelSubscription = async () => {
     if (!confirm('Kas olete kindel, et soovite tellimuse lõpetada?')) {
-      return
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     try {
-      const { error } = await supabase
-        .from('stripe_subscriptions')
-        .update({ 
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString()
-        })
-        .eq('id', activeSubscription.id)
+      // Tee päring meie API endpointi
+      const response = await fetch('/api/stripe/cancel-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          subscriptionId: activeSubscription.id 
+        }),
+      });
 
-      if (error) throw error
+      const data = await response.json();
+      console.log('Vastus serverist:', data);
 
-      setActiveSubscription(null)
-      alert('Tellimus on edukalt lõpetatud. Tellimus kehtib kuni perioodi lõpuni.')
+      if (!response.ok) {
+        throw new Error(data.error || 'Viga tellimuse tühistamisel');
+      }
+
+      setActiveSubscription(null);
+      alert('Tellimus on edukalt lõpetatud. Tellimus kehtib kuni perioodi lõpuni.');
+      
     } catch (error) {
-      console.error('Error cancelling subscription:', error)
-      alert('Viga tellimuse lõpetamisel. Palun proovige hiljem uuesti.')
+      console.error('Error cancelling subscription:', error);
+      alert('Viga tellimuse lõpetamisel: ' + (error.message || 'Palun proovige hiljem uuesti.'));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const renderActionButton = () => {
     if (loading) {
@@ -136,6 +146,17 @@ export default function PricingCard() {
     }
 
     if (activeSubscription) {
+      if (activeSubscription.status === 'cancelled') {
+        return (
+          <Button 
+            variant="secondary" 
+            className="w-full sm:w-auto font-medium"
+            onClick={handleSubscribe}
+          >
+            Telli uuesti
+          </Button>
+        )
+      }
       return (
         <Button 
           variant="destructive" 
@@ -180,8 +201,24 @@ export default function PricingCard() {
                   </p>
                 </div>
                 {activeSubscription && (
-                  <p className="text-sm bg-white/10 p-2 rounded">
-                    Teie tellimus kehtib kuni: {new Date(activeSubscription.subscription_end_date).toLocaleDateString('et-EE')}
+                  <p className="text-sm bg-white/10 p-2 rounded space-y-1">
+                    {activeSubscription.status === 'active' ? (
+                      <>
+                        <span className="inline-flex items-center">
+                          <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
+                          Aktiivne tellimus
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-flex items-center">
+                          <span className="w-2 h-2 bg-yellow-400 rounded-full mr-2"></span>
+                          Lõpetatud tellimus
+                        </span>
+                      </>
+                    )}
+                    <br />
+                    Tellimus kehtib kuni: {new Date(activeSubscription.subscription_end_date).toLocaleDateString('et-EE')}
                   </p>
                 )}
                 {renderActionButton()}

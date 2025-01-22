@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { supabase } from "@/lib/supabaseClient"
 
 interface LoginFormProps {
@@ -19,6 +19,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const supabaseAuth = createClientComponentClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,13 +27,25 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      // Autendi mõlema kliendiga
+      const [authResult, localResult] = await Promise.all([
+        // Auth helpers klient küpsiste jaoks
+        supabaseAuth.auth.signInWithPassword({
+          email,
+          password,
+          options: {
+            persistSession: true,
+          }
+        }),
+        // Tavaline klient localStorage jaoks
+        supabase.auth.signInWithPassword({
+          email,
+          password
+        })
+      ])
 
+      const error = authResult.error || localResult.error
       if (error) {
-        // Tõlgime Supabase vead eesti keelde
         switch (error.message) {
           case 'Invalid login credentials':
             throw new Error('Vale e-post või parool')
@@ -43,12 +56,13 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
         }
       }
 
-      if (data?.user) {
+      if (authResult.data?.user) {
+        router.refresh()
+        
         if (onLoginSuccess) {
-          onLoginSuccess() // Kutsu callback välja eduka sisselogimise korral
+          onLoginSuccess()
         } else {
-          router.push('/minu-konto')
-          router.refresh()
+          router.push('/kasutaja')
         }
       }
     } catch (error) {
@@ -59,8 +73,8 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardContent className="pt-6">
+    <div className="w-full max-w-md mx-auto">
+      <div className="pt-6">
         <div className="space-y-6">
           <div className="space-y-2">
             <h1 className="text-3xl font-bold tracking-tight text-[#14213D]">Logi sisse</h1>
@@ -122,7 +136,7 @@ export default function LoginForm({ onLoginSuccess }: LoginFormProps) {
             </Link>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 } 
