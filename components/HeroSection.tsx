@@ -353,15 +353,14 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onSearch }) => {
         registryCode={registryCode}
       />
 
-      <ContextPopup
-        isOpen={isContextPopupOpen}
-        onClose={() => {
-          setIsContextPopupOpen(false);
-          handleContextSubmit("");
-        }}
-        onSubmit={handleContextSubmit}
-        setLoadingPopup={setIsLoadingPopupOpen}
-      />
+<ContextPopup
+  isOpen={isContextPopupOpen}
+  onClose={() => {
+    setIsContextPopupOpen(false);
+  }}
+  onSubmit={handleContextSubmit}
+  setLoadingPopup={setIsLoadingPopupOpen}
+/> 
 
       <LoadingPopup 
         isOpen={isLoadingPopupOpen} 
